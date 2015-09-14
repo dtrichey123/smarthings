@@ -1,0 +1,684 @@
+/** 
+2  *  Nest Direct 
+3  * 
+4  *  Author: dianoga7@3dgo.net 
+5  *  Code: https://github.com/smartthings-users/device-type.nest 
+6  * 
+7  * INSTALLATION 
+8  * ========================================= 
+9  * 1) Create a new device type (https://graph.api.smartthings.com/ide/devices) 
+10  *     Name: Nest 
+11  *     Author: dianoga7@3dgo.net 
+12  *     Capabilities: 
+13  *         Polling 
+14  *         Relative Humidity Measurement 
+15  *         Thermostat 
+16  *         Temperature Measurement 
+17  *         Presence Sensor 
+18  *         Sensor 
+19  *     Custom Attributes: 
+20  *         temperatureUnit 
+21  *     Custom Commands: 
+22  *         away 
+23  *         present 
+24  *         setPresence 
+25  *         heatingSetpointUp 
+26  *         heatingSetpointDown 
+27  *         coolingSetpointUp 
+28  *         coolingSetpointDown 
+29  *         setFahrenheit 
+30  *         setCelsius 
+31  * 
+32  * 2) If you want to switch from slider controls to buttons, comment out the slider details line and uncomment the button details line. 
+33  * 
+34  * 3) Create a new device (https://graph.api.smartthings.com/device/list) 
+35  *     Name: Your Choice 
+36  *     Device Network Id: Your Choice 
+37  *     Type: Nest (should be the last option) 
+38  *     Location: Choose the correct location 
+39  *     Hub/Group: Leave blank 
+40  * 
+41  * 4) Update device preferences 
+42  *     Click on the new device to see the details. 
+43  *     Click the edit button next to Preferences 
+44  *     Fill in your information. 
+45  *     To find your serial number, login to http://home.nest.com. Click on the thermostat 
+46  *     you want to control. Under settings, go to Technical Info. Your serial number is 
+47  *     the second item. 
+48  * 
+49  * 5) That's it, you're done. 
+50  * 
+51  * Copyright (C) 2013 Brian Steere <dianoga7@3dgo.net> 
+52  * Permission is hereby granted, free of charge, to any person obtaining a copy of this 
+53  * software and associated documentation files (the "Software"), to deal in the Software 
+54  * without restriction, including without limitation the rights to use, copy, modify, 
+55  * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to 
+56  * permit persons to whom the Software is furnished to do so, subject to the following 
+57  * conditions: The above copyright notice and this permission notice shall be included 
+58  * in all copies or substantial portions of the Software. 
+59  * 
+60  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+61  * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+62  * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT 
+63  * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+64  * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
+65  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+66  */ 
+67 
+ 
+68 preferences { 
+69 	input("username", "text", title: "Username", description: "Your Nest username (usually an email address)") 
+70 	input("password", "password", title: "Password", description: "Your Nest password") 
+71 	input("serial", "text", title: "Serial #", description: "The serial number of your thermostat") 
+72 } 
+73 
+ 
+74 // for the UI 
+75 metadata { 
+76 	definition (name: "Nest", namespace: "smartthings-users", author: "dianoga7@3dgo.net") { 
+77 		capability "Polling" 
+78 		capability "Relative Humidity Measurement" 
+79 		capability "Thermostat" 
+80 		capability "Temperature Measurement" 
+81 		capability "Presence Sensor" 
+82 		capability "Sensor" 
+83 
+ 
+84 		command "away" 
+85 		command "present" 
+86 		command "setPresence" 
+87 		command "heatingSetpointUp" 
+88 		command "heatingSetpointDown" 
+89 		command "coolingSetpointUp" 
+90 		command "coolingSetpointDown" 
+91 		command "setFahrenheit" 
+92 		command "setCelsius" 
+93 
+ 
+94 		attribute "temperatureUnit", "string" 
+95 	} 
+96 
+ 
+97 	simulator { 
+98 		// TODO: define status and reply messages here 
+99 	} 
+100 
+ 
+101 	tiles { 
+102 		valueTile("temperature", "device.temperature", canChangeIcon: true, canChangeBackground:true) { 
+103 			state("temperature", label: '${currentValue}°', backgroundColors: [ 
+104 				// Celsius Color Range 
+105 				[value: 0, color: "#153591"], 
+106 				[value: 7, color: "#1e9cbb"], 
+107 				[value: 15, color: "#90d2a7"], 
+108 				[value: 23, color: "#44b621"], 
+109 				[value: 29, color: "#f1d801"], 
+110 				[value: 33, color: "#d04e00"], 
+111 				[value: 36, color: "#bc2323"], 
+112 				// Fahrenheit Color Range 
+113 				[value: 40, color: "#153591"], 
+114 				[value: 44, color: "#1e9cbb"], 
+115 				[value: 59, color: "#90d2a7"], 
+116 				[value: 74, color: "#44b621"], 
+117 				[value: 84, color: "#f1d801"], 
+118 				[value: 92, color: "#d04e00"], 
+119 				[value: 96, color: "#bc2323"] 
+120 			] 
+121 			) 
+122 		} 
+123 
+ 
+124 		standardTile("thermostatMode", "device.thermostatMode", inactiveLabel: true, decoration: "flat") { 
+125 			state("auto", action:"thermostat.off", icon: "st.thermostat.auto") 
+126 			state("off", action:"thermostat.cool", icon: "st.thermostat.heating-cooling-off") 
+127 			state("cool", action:"thermostat.heat", icon: "st.thermostat.cool") 
+128 			state("heat", action:"thermostat.auto", icon: "st.thermostat.heat") 
+129 		} 
+130 
+ 
+131 		standardTile("thermostatFanMode", "device.thermostatFanMode", inactiveLabel: true, decoration: "flat") { 
+132 			state "auto", action:"thermostat.fanOn", icon: "st.thermostat.fan-auto" 
+133 			state "on", action:"thermostat.fanCirculate", icon: "st.thermostat.fan-on" 
+134 			state "circulate", action:"thermostat.fanAuto", icon: "st.thermostat.fan-circulate" 
+135 		} 
+136 
+ 
+137 		valueTile("heatingSetpoint", "device.heatingSetpoint") { 
+138 			state "default", label:'${currentValue}°', unit:"Heat", backgroundColor:"#bc2323" 
+139 		} 
+140 
+ 
+141 		valueTile("coolingSetpoint", "device.coolingSetpoint") { 
+142 			state "default", label:'${currentValue}°', unit:"Cool", backgroundColor:"#1e9cbb" 
+143 		} 
+144 
+ 
+145 		standardTile("thermostatOperatingState", "device.thermostatOperatingState", inactiveLabel: false, decoration: "flat") { 
+146 			state "idle", action:"polling.poll", label:'${name}', icon: "st.sonos.pause-icon" 
+147 			state "cooling", action:"polling.poll", label:'  ', icon: "st.thermostat.cooling", backgroundColor:"#1e9cbb" 
+148 			state "heating", action:"polling.poll", label:'  ', icon: "st.thermostat.heating", backgroundColor:"#bc2323" 
+149 			state "fan only", action:"polling.poll", label:'${name}', icon: "st.Appliances.appliances11" 
+150 		} 
+151 
+ 
+152 		valueTile("humidity", "device.humidity", inactiveLabel: false) { 
+153 			state "default", label:'${currentValue}%', unit:"Humidity" 
+154 		} 
+155 
+ 
+156 		standardTile("presence", "device.presence", inactiveLabel: false, decoration: "flat") { 
+157 			state "present", label:'${name}', action:"away", icon: "st.Home.home2" 
+158 			state "not present", label:'away', action:"present", icon: "st.Transportation.transportation5" 
+159 		} 
+160 
+ 
+161 		standardTile("refresh", "device.thermostatMode", inactiveLabel: false, decoration: "flat") { 
+162 			state "default", action:"polling.poll", icon:"st.secondary.refresh" 
+163 		} 
+164 
+ 
+165 		standardTile("temperatureUnit", "device.temperatureUnit", canChangeIcon: false) { 
+166 			state "fahrenheit",  label: "°F", icon: "st.alarm.temperature.normal", action:"setCelsius" 
+167 			state "celsius", label: "°C", icon: "st.alarm.temperature.normal", action:"setFahrenheit" 
+168 		} 
+169 
+ 
+170 		controlTile("heatSliderControl", "device.heatingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false) { 
+171 			state "setHeatingSetpoint", label:'Set temperature to', action:"thermostat.setHeatingSetpoint" 
+172 		} 
+173 		controlTile("coolSliderControl", "device.coolingSetpoint", "slider", height: 1, width: 2, inactiveLabel: false) { 
+174 			state "setCoolingSetpoint", label:'Set temperature to', action:"thermostat.setCoolingSetpoint" 
+175 		} 
+176 
+ 
+177 		standardTile("heatingSetpointUp", "device.heatingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") { 
+178 			state "heatingSetpointUp", label:'  ', action:"heatingSetpointUp", icon:"st.thermostat.thermostat-up", backgroundColor:"#bc2323" 
+179 		} 
+180 
+ 
+181 		standardTile("heatingSetpointDown", "device.heatingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") { 
+182 			state "heatingSetpointDown", label:'  ', action:"heatingSetpointDown", icon:"st.thermostat.thermostat-down", backgroundColor:"#bc2323" 
+183 		} 
+184 
+ 
+185 		standardTile("coolingSetpointUp", "device.coolingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") { 
+186 			state "coolingSetpointUp", label:'  ', action:"coolingSetpointUp", icon:"st.thermostat.thermostat-up", backgroundColor:"#1e9cbb" 
+187 		} 
+188 
+ 
+189 		standardTile("coolingSetpointDown", "device.coolingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") { 
+190 			state "coolingSetpointDown", label:'  ', action:"coolingSetpointDown", icon:"st.thermostat.thermostat-down", backgroundColor:"#1e9cbb" 
+191 		} 
+192 
+ 
+193 		main(["temperature", "thermostatOperatingState", "humidity"]) 
+194 
+ 
+195 		// ============================================================ 
+196 		// Slider or Buttons... 
+197 		// To expose buttons, comment out the first detials line below and uncomment the second details line below. 
+198 		// To expose sliders, uncomment the first details line below and comment out the second details line below. 
+199 
+ 
+200 		details(["temperature", "thermostatOperatingState", "humidity", "thermostatMode", "thermostatFanMode", "presence", "heatingSetpoint", "heatSliderControl", "coolingSetpoint", "coolSliderControl", "temperatureUnit", "refresh"]) 
+201 		// details(["temperature", "thermostatOperatingState", "humidity", "thermostatMode", "thermostatFanMode", "presence", "heatingSetpointDown", "heatingSetpoint", "heatingSetpointUp", "coolingSetpointDown", "coolingSetpoint", "coolingSetpointUp", "temperatureUnit", "refresh"]) 
+202 
+ 
+203 		// ============================================================ 
+204 
+ 
+205 	} 
+206 
+ 
+207 } 
+208 
+ 
+209 // parse events into attributes 
+210 def parse(String description) { 
+211 
+ 
+212 } 
+213 
+ 
+214 // handle commands 
+215 def setHeatingSetpoint(temp) { 
+216 	def latestThermostatMode = device.latestState('thermostatMode') 
+217 	def temperatureUnit = device.latestValue('temperatureUnit') 
+218 
+ 
+219 	switch (temperatureUnit) { 
+220 		case "celsius": 
+221 			if (temp) { 
+222 				if (temp < 9) { 
+223 					temp = 9 
+224 				} 
+225 				if (temp > 32) { 
+226 					temp = 32 
+227 				} 
+228 				if (latestThermostatMode.stringValue == 'auto') { 
+229 					api('temperature', ['target_change_pending': true, 'target_temperature_low': temp]) { 
+230 						sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+231 					} 
+232 				} else if (latestThermostatMode.stringValue == 'heat') { 
+233 					api('temperature', ['target_change_pending': true, 'target_temperature': temp]) { 
+234 							sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+235 					} 
+236 				} 
+237 			} 
+238 			break; 
+239 		default: 
+240 			if (temp) { 
+241 				if (temp < 51) { 
+242 					temp = 51 
+243 				} 
+244 				if (temp > 89) { 
+245 					temp = 89 
+246 				} 
+247 				if (latestThermostatMode.stringValue == 'auto') { 
+248 					api('temperature', ['target_change_pending': true, 'target_temperature_low': fToC(temp)]) { 
+249 						sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+250 					} 
+251 				} else if (latestThermostatMode.stringValue == 'heat') { 
+252 					api('temperature', ['target_change_pending': true, 'target_temperature': fToC(temp)]) { 
+253 						sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+254 					} 
+255 				} 
+256 			} 
+257 			break; 
+258 	} 
+259 	poll() 
+260 } 
+261 
+ 
+262 def coolingSetpointUp(){ 
+263 	int newSetpoint = device.currentValue("coolingSetpoint") + 1 
+264 	log.debug "Setting cool set point up to: ${newSetpoint}" 
+265 	setCoolingSetpoint(newSetpoint) 
+266 } 
+267 
+ 
+268 def coolingSetpointDown(){ 
+269 	int newSetpoint = device.currentValue("coolingSetpoint") - 1 
+270 	log.debug "Setting cool set point down to: ${newSetpoint}" 
+271 	setCoolingSetpoint(newSetpoint) 
+272 } 
+273 
+ 
+274 def setCoolingSetpoint(temp) { 
+275 	def latestThermostatMode = device.latestState('thermostatMode') 
+276 	def temperatureUnit = device.latestValue('temperatureUnit') 
+277 
+ 
+278 	switch (temperatureUnit) { 
+279 		case "celsius": 
+280 			if (temp) { 
+281 				if (temp < 9) { 
+282 					temp = 9 
+283 				} 
+284 				if (temp > 32) { 
+285 					temp = 32 
+286 				} 
+287 				if (latestThermostatMode.stringValue == 'auto') { 
+288 					api('temperature', ['target_change_pending': true, 'target_temperature_high': temp]) { 
+289 						sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+290 					} 
+291 				} else if (latestThermostatMode.stringValue == 'cool') { 
+292 					api('temperature', ['target_change_pending': true, 'target_temperature': temp]) { 
+293 						sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+294 					} 
+295 				} 
+296 			} 
+297 			break; 
+298 		default: 
+299 			if (temp) { 
+300 				if (temp < 51) { 
+301 					temp = 51 
+302 				} 
+303 				if (temp > 89) { 
+304 					temp = 89 
+305 				} 
+306 				if (latestThermostatMode.stringValue == 'auto') { 
+307 					api('temperature', ['target_change_pending': true, 'target_temperature_high': fToC(temp)]) { 
+308 						sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+309 					} 
+310 				} else if (latestThermostatMode.stringValue == 'cool') { 
+311 					api('temperature', ['target_change_pending': true, 'target_temperature': fToC(temp)]) { 
+312 						sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+313 					} 
+314 				} 
+315 			} 
+316 			break; 
+317 	} 
+318 	poll() 
+319 } 
+320 
+ 
+321 def heatingSetpointUp(){ 
+322 	int newSetpoint = device.currentValue("heatingSetpoint") + 1 
+323 	log.debug "Setting heat set point up to: ${newSetpoint}" 
+324 	setHeatingSetpoint(newSetpoint) 
+325 } 
+326 
+ 
+327 def heatingSetpointDown(){ 
+328 	int newSetpoint = device.currentValue("heatingSetpoint") - 1 
+329 	log.debug "Setting heat set point down to: ${newSetpoint}" 
+330 	setHeatingSetpoint(newSetpoint) 
+331 } 
+332 
+ 
+333 def setFahrenheit() { 
+334 	def temperatureUnit = "fahrenheit" 
+335 	log.debug "Setting temperatureUnit to: ${temperatureUnit}" 
+336 	sendEvent(name: "temperatureUnit",   value: temperatureUnit) 
+337 	poll() 
+338 } 
+339 
+ 
+340 def setCelsius() { 
+341 	def temperatureUnit = "celsius" 
+342 	log.debug "Setting temperatureUnit to: ${temperatureUnit}" 
+343 	sendEvent(name: "temperatureUnit",   value: temperatureUnit) 
+344 	poll() 
+345 } 
+346 
+ 
+347 def off() { 
+348 	setThermostatMode('off') 
+349 } 
+350 
+ 
+351 def heat() { 
+352 	setThermostatMode('heat') 
+353 } 
+354 
+ 
+355 def emergencyHeat() { 
+356 	setThermostatMode('heat') 
+357 } 
+358 
+ 
+359 def cool() { 
+360 	setThermostatMode('cool') 
+361 } 
+362 
+ 
+363 def auto() { 
+364 	setThermostatMode('range') 
+365 } 
+366 
+ 
+367 def setThermostatMode(mode) { 
+368 	mode = mode == 'emergency heat'? 'heat' : mode 
+369 
+ 
+370 	api('thermostat_mode', ['target_change_pending': true, 'target_temperature_type': mode]) { 
+371 		mode = mode == 'range' ? 'auto' : mode 
+372 		sendEvent(name: 'thermostatMode', value: mode) 
+373 		poll() 
+374 	} 
+375 } 
+376 
+ 
+377 def fanOn() { 
+378 	setThermostatFanMode('on') 
+379 } 
+380 
+ 
+381 def fanAuto() { 
+382 	setThermostatFanMode('auto') 
+383 } 
+384 
+ 
+385 def fanCirculate() { 
+386 	setThermostatFanMode('circulate') 
+387 } 
+388 
+ 
+389 def setThermostatFanMode(mode) { 
+390 	def modes = [ 
+391 		on: ['fan_mode': 'on'], 
+392 		auto: ['fan_mode': 'auto'], 
+393 		circulate: ['fan_mode': 'duty-cycle', 'fan_duty_cycle': 900] 
+394 	] 
+395 
+ 
+396 	api('fan_mode', modes.getAt(mode)) { 
+397 		sendEvent(name: 'thermostatFanMode', value: mode) 
+398 		poll() 
+399 	} 
+400 } 
+401 
+ 
+402 def away() { 
+403 	setPresence('away') 
+404 	sendEvent(name: 'presence', value: 'not present') 
+405 } 
+406 
+ 
+407 def present() { 
+408 	setPresence('present') 
+409 	sendEvent(name: 'presence', value: 'present') 
+410 } 
+411 
+ 
+412 def setPresence(status) { 
+413 	log.debug "Status: $status" 
+414 	api('presence', ['away': status == 'away', 'away_timestamp': new Date().getTime(), 'away_setter': 0]) { 
+415 		poll() 
+416 	} 
+417 } 
+418 
+ 
+419 def poll() { 
+420 	log.debug "Executing 'poll'" 
+421 	api('status', []) { 
+422 		data.device = it.data.device.getAt(settings.serial) 
+423 		data.shared = it.data.shared.getAt(settings.serial) 
+424 		data.structureId = it.data.link.getAt(settings.serial).structure.tokenize('.')[1] 
+425 		data.structure = it.data.structure.getAt(data.structureId) 
+426 
+ 
+427 		data.device.fan_mode = data.device.fan_mode == 'duty-cycle'? 'circulate' : data.device.fan_mode 
+428 		data.structure.away = data.structure.away ? 'away' : 'present' 
+429 
+ 
+430 		log.debug(data.shared) 
+431 
+ 
+432 		def humidity = data.device.current_humidity 
+433 		def temperatureType = data.shared.target_temperature_type 
+434 		def fanMode = data.device.fan_mode 
+435 		def heatingSetpoint = '--' 
+436 		def coolingSetpoint = '--' 
+437 
+ 
+438 		temperatureType = temperatureType == 'range' ? 'auto' : temperatureType 
+439 
+ 
+440 		sendEvent(name: 'humidity', value: humidity) 
+441 		sendEvent(name: 'thermostatFanMode', value: fanMode) 
+442 		sendEvent(name: 'thermostatMode', value: temperatureType) 
+443 
+ 
+444 		def temperatureUnit = device.latestValue('temperatureUnit') 
+445 
+ 
+446 		switch (temperatureUnit) { 
+447 			case "celsius": 
+448 				def temperature = Math.round(data.shared.current_temperature) 
+449 				def targetTemperature = Math.round(data.shared.target_temperature) 
+450 
+ 
+451 				if (temperatureType == "cool") { 
+452 					coolingSetpoint = targetTemperature 
+453 				} else if (temperatureType == "heat") { 
+454 					heatingSetpoint = targetTemperature 
+455 				} else if (temperatureType == "auto") { 
+456 					coolingSetpoint = Math.round(data.shared.target_temperature_high) 
+457 					heatingSetpoint = Math.round(data.shared.target_temperature_low) 
+458 				} 
+459 
+ 
+460 				sendEvent(name: 'temperature', value: temperature, unit: temperatureUnit, state: temperatureType) 
+461 				sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+462 				sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+463 				break; 
+464 			default: 
+465 				def temperature = Math.round(cToF(data.shared.current_temperature)) 
+466 				def targetTemperature = Math.round(cToF(data.shared.target_temperature)) 
+467 
+ 
+468 				if (temperatureType == "cool") { 
+469 					coolingSetpoint = targetTemperature 
+470 				} else if (temperatureType == "heat") { 
+471 					heatingSetpoint = targetTemperature 
+472 				} else if (temperatureType == "auto") { 
+473 					coolingSetpoint = Math.round(cToF(data.shared.target_temperature_high)) 
+474 					heatingSetpoint = Math.round(cToF(data.shared.target_temperature_low)) 
+475 				} 
+476 
+ 
+477 				sendEvent(name: 'temperature', value: temperature, unit: temperatureUnit, state: temperatureType) 
+478 				sendEvent(name: 'coolingSetpoint', value: coolingSetpoint, unit: temperatureUnit, state: "cool") 
+479 				sendEvent(name: 'heatingSetpoint', value: heatingSetpoint, unit: temperatureUnit, state: "heat") 
+480 				break; 
+481 			} 
+482 
+ 
+483 		switch (device.latestValue('presence')) { 
+484 			case "present": 
+485 				if (data.structure.away == 'away') { 
+486 					sendEvent(name: 'presence', value: 'not present') 
+487 				} 
+488 				break; 
+489 			case "not present": 
+490 				if (data.structure.away == 'present') { 
+491 					sendEvent(name: 'presence', value: 'present') 
+492 				} 
+493 				break; 
+494 		} 
+495 
+ 
+496 		if (data.shared.hvac_ac_state) { 
+497 			sendEvent(name: 'thermostatOperatingState', value: "cooling") 
+498 		} else if (data.shared.hvac_heater_state) { 
+499 			sendEvent(name: 'thermostatOperatingState', value: "heating") 
+500 		} else if (data.shared.hvac_fan_state) { 
+501 			sendEvent(name: 'thermostatOperatingState', value: "fan only") 
+502 		} else { 
+503 			sendEvent(name: 'thermostatOperatingState', value: "idle") 
+504 		} 
+505 	} 
+506 } 
+507 
+ 
+508 def api(method, args = [], success = {}) { 
+509 	if(!isLoggedIn()) { 
+510 		log.debug "Need to login" 
+511 		login(method, args, success) 
+512 		return 
+513 	} 
+514 
+ 
+515 	def methods = [ 
+516 		'status': [uri: "/v2/mobile/${data.auth.user}", type: 'get'], 
+517 		'fan_mode': [uri: "/v2/put/device.${settings.serial}", type: 'post'], 
+518 		'thermostat_mode': [uri: "/v2/put/shared.${settings.serial}", type: 'post'], 
+519 		'temperature': [uri: "/v2/put/shared.${settings.serial}", type: 'post'], 
+520 		'presence': [uri: "/v2/put/structure.${data.structureId}", type: 'post'] 
+521 	] 
+522 
+ 
+523 	def request = methods.getAt(method) 
+524 
+ 
+525 	log.debug "Logged in" 
+526 	doRequest(request.uri, args, request.type, success) 
+527 } 
+528 
+ 
+529 // Need to be logged in before this is called. So don't call this. Call api. 
+530 def doRequest(uri, args, type, success) { 
+531 	log.debug "Calling $type : $uri : $args" 
+532 
+ 
+533 	if(uri.charAt(0) == '/') { 
+534 		uri = "${data.auth.urls.transport_url}${uri}" 
+535 	} 
+536 
+ 
+537 	def params = [ 
+538 		uri: uri, 
+539 		headers: [ 
+540 			'X-nl-protocol-version': 1, 
+541 			'X-nl-user-id': data.auth.userid, 
+542 			'Authorization': "Basic ${data.auth.access_token}" 
+543 		], 
+544 		body: args 
+545 	] 
+546 
+ 
+547 	def postRequest = { response -> 
+548 		if (response.getStatus() == 302) { 
+549 			def locations = response.getHeaders("Location") 
+550 			def location = locations[0].getValue() 
+551 			log.debug "redirecting to ${location}" 
+552 			doRequest(location, args, type, success) 
+553 		} else { 
+554 			success.call(response) 
+555 		} 
+556 	} 
+557 
+ 
+558 	try { 
+559 		if (type == 'post') { 
+560 			httpPostJson(params, postRequest) 
+561 		} else if (type == 'get') { 
+562 			httpGet(params, postRequest) 
+563 		} 
+564 	} catch (Throwable e) { 
+565 		login() 
+566 	} 
+567 } 
+568 
+ 
+569 def login(method = null, args = [], success = {}) { 
+570 	def params = [ 
+571 		uri: 'https://home.nest.com/user/login', 
+572 		body: [username: settings.username, password: settings.password] 
+573 	] 
+574 
+ 
+575 	httpPost(params) {response -> 
+576 		data.auth = response.data 
+577 		data.auth.expires_in = Date.parse('EEE, dd-MMM-yyyy HH:mm:ss z', response.data.expires_in).getTime() 
+578 		log.debug data.auth 
+579 
+ 
+580 		api(method, args, success) 
+581 	} 
+582 } 
+583 
+ 
+584 def isLoggedIn() { 
+585 	if(!data.auth) { 
+586 		log.debug "No data.auth" 
+587 		return false 
+588 	} 
+589 
+ 
+590 	def now = new Date().getTime(); 
+591 	return data.auth.expires_in > now 
+592 } 
+593 
+ 
+594 def cToF(temp) { 
+595 	return (temp * 1.8 + 32).toDouble() 
+596 } 
+597 
+ 
+598 def fToC(temp) { 
+599 	return ((temp - 32) / 1.8).toDouble() 
+600 } 
+Enter file contents here
